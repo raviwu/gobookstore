@@ -1,10 +1,11 @@
 package routes
 
 import (
-	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jinzhu/gorm"
@@ -15,8 +16,8 @@ var (
 	db *gorm.DB
 )
 
-func performRequest(r http.Handler, method, path string) *httptest.ResponseRecorder {
-	req, _ := http.NewRequest(method, path, nil)
+func performRequest(r http.Handler, method, path string, body string) *httptest.ResponseRecorder {
+	req, _ := http.NewRequest(method, path, ioutil.NopCloser(strings.NewReader(body)))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
@@ -25,12 +26,36 @@ func performRequest(r http.Handler, method, path string) *httptest.ResponseRecor
 func TestFindBooks(t *testing.T) {
 	db = models.SetupModels()
 	defer db.Close()
+	db.Exec(`DELETE FROM books`)
 
 	body := `{"data":[]}`
 
 	router := SetupRouter(db)
 
-	w := performRequest(router, "GET", "/books")
+	w := performRequest(router, "GET", "/books", "")
+
+	if w.Code != http.StatusOK {
+		t.Error("failing request")
+	}
+
+	if w.Body.String() != body {
+		t.Errorf("expected: %s\nactual: %s", body, w.Body)
+	}
+}
+
+func TestCreateBook(t *testing.T) {
+	db = models.SetupModels()
+	defer db.Close()
+	db.Exec(`DELETE FROM books`)
+
+	router := SetupRouter(db)
+
+	w := performRequest(router, "POST", "/books", `{"title":"new book","author":"another ravi"}`)
+
+	var books []models.Book
+	db.Find(&books)
+
+	body := fmt.Sprintf(`{"data":{"id":%v,"title":"new book","author":"another ravi"}}`, books[0].ID)
 
 	if w.Code != http.StatusOK {
 		t.Error("failing request")
@@ -44,21 +69,19 @@ func TestFindBooks(t *testing.T) {
 func TestFindBook(t *testing.T) {
 	db = models.SetupModels()
 	defer db.Close()
+	db.Exec(`DELETE FROM books`)
 
-	cleaner := deleteCreatedEntities(db)
-	defer cleaner()
-
-	db.Create(&models.Book{Title: "book", Author: "ravi"})
+	book := models.Book{Title: "new new book", Author: "hey ravi"}
+	db.Create(&book)
 
 	var books []models.Book
 	db.Find(&books)
 
-	t.Log(books)
-
-	body := fmt.Sprintf(`{"data":[{"id":%v,"title":"book","author":"ravi"}]}`, books[0].ID)
+	body := fmt.Sprintf(`{"data":{"id":%v,"title":"%s","author":"%s"}}`, books[0].ID, books[0].Title, books[0].Author)
+	path := fmt.Sprintf(`/books/%v`, books[0].ID)
 
 	router := SetupRouter(db)
-	w := performRequest(router, "GET", "/books")
+	w := performRequest(router, "GET", path, "")
 
 	if w.Code != http.StatusOK {
 		t.Error("failing request")
@@ -69,34 +92,52 @@ func TestFindBook(t *testing.T) {
 	}
 }
 
-func deleteCreatedEntities(db *gorm.DB) func() {
-	type entity struct {
-		table   string
-		keyname string
-		key     interface{}
+func TestUpdateBook(t *testing.T) {
+	db = models.SetupModels()
+	defer db.Close()
+	db.Exec(`DELETE FROM books`)
+
+	book := models.Book{Title: "new new book", Author: "hey ravi"}
+	db.Create(&book)
+
+	body := fmt.Sprintf(`{"data":{"id":%v,"title":"%s","author":"%s"}}`, book.ID, "aaa", "bbb")
+
+	data := fmt.Sprintf(`{"title":"%s","author":"%s"}`, "aaa", "bbb")
+	path := fmt.Sprintf(`/books/%v`, book.ID)
+
+	router := SetupRouter(db)
+	w := performRequest(router, "PATCH", path, data)
+
+	if w.Code != http.StatusOK {
+		t.Error("failing request")
 	}
-	var entries []entity
-	hookName := "cleanupHook"
 
-	db.Callback().Create().After("gorm:create").Register(hookName, func(scope *gorm.Scope) {
-		fmt.Printf("Inserted entities of %s with %s=%v\n", scope.TableName(), scope.PrimaryKey(), scope.PrimaryKeyValue())
-		entries = append(entries, entity{table: scope.TableName(), keyname: scope.PrimaryKey(), key: scope.PrimaryKeyValue()})
-	})
+	if w.Body.String() != body {
+		t.Errorf("expected: %s\nactual: %s", body, w.Body)
+	}
+}
 
-	return func() {
-		defer db.Callback().Create().Remove(hookName)
-		_, inTransaction := db.CommonDB().(*sql.Tx)
-		tx := db
-		if !inTransaction {
-			tx = db.Begin()
-		}
+func TestDeleteBook(t *testing.T) {
+	db = models.SetupModels()
+	defer db.Close()
+	db.Exec(`DELETE FROM books`)
 
-		for _, entry := range entries {
-			tx.Table(entry.table).Where(entry.keyname+" = ?", entry.key).Delete("")
-		}
+	book := models.Book{Title: "new new book", Author: "hey ravi"}
+	db.Create(&book)
 
-		if !inTransaction {
-			tx.Commit()
-		}
+	path := fmt.Sprintf(`/books/%v`, book.ID)
+
+	router := SetupRouter(db)
+	w := performRequest(router, "DELETE", path, "")
+
+	if w.Code != http.StatusOK {
+		t.Error("failing request")
+	}
+
+	var books []models.Book
+	db.Find(&books)
+
+	if len(books) > 0 {
+		t.Errorf("expected: %s\nactual: %v", "[]", books)
 	}
 }
