@@ -9,13 +9,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/raviwu/gobookstore/models"
 	"github.com/raviwu/gobookstore/routes"
 )
 
 func main() {
+	db := models.SetupModels()
+	defer db.Close()
+
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: routes.SetupRouter(),
+		Handler: routes.SetupRouter(db),
 	}
 
 	// Initializing the server in a goroutine so that

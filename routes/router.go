@@ -5,14 +5,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
 	"github.com/raviwu/gobookstore/controllers"
-	"github.com/raviwu/gobookstore/models"
 )
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
-
-	db := models.SetupModels()
 
 	r.Use(func(c *gin.Context) {
 		c.Set("db", db)
