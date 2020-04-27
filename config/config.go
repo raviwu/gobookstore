@@ -11,10 +11,8 @@ import (
 
 type config struct {
 	Database struct {
-		Driver   string `yaml:"driver", envconfig:"DB_DRIVER"`
-		Database string `yaml:"database", envconfig:"DB_DATABASE"`
-		Username string `yaml:"user", envconfig:"DB_USER"`
-		Password string `yaml:"pass", envconfig:"DB_PASSWORD"`
+		Driver   string `yaml:"driver" envconfig:"DB_DRIVER"`
+		Database string `yaml:"database" envconfig:"DB_DATABASE"`
 	} `yaml:"database"`
 }
 
