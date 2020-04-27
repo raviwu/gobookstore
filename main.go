@@ -9,35 +9,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/raviwu/gobookstore/controllers"
 	"github.com/raviwu/gobookstore/models"
+	"github.com/raviwu/gobookstore/routes"
 )
 
 func main() {
-	r := gin.Default()
-
 	db := models.SetupModels()
-
-	r.Use(func(c *gin.Context) {
-		c.Set("db", db)
-		c.Next()
-	})
-
-	r.GET("/books", controllers.FindBooks)
-	r.POST("/books", controllers.CreateBook)
-	r.GET("/books/:id", controllers.FindBook)
-	r.PATCH("/books/:id", controllers.UpdateBook)
-	r.DELETE("/books/:id", controllers.DeleteBook)
-
-	r.GET("/", func(c *gin.Context) {
-		time.Sleep(5 * time.Second)
-		c.String(http.StatusOK, "Welcome Gin Server")
-	})
+	defer db.Close()
 
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: r,
+		Handler: routes.SetupRouter(db),
 	}
 
 	// Initializing the server in a goroutine so that
