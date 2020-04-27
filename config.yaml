@@ -1,0 +1,5 @@
+database:
+  driver: "sqlite3"
+  database: "test.db"
+  user: ""
+  pass: ""
